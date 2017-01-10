@@ -28,34 +28,112 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <codec.h>
+#include <sys/ioctl.h>
 
 #define SYNC_OUTSIDE 0x02
 #define UCODE_IP_ONLY_PARAM 0x08
 
+ /* video freerun mode */
+#define FREERUN_NONE    0	/* no freerun mode */
+#define FREERUN_NODUR   1	/* freerun without duration */
+#define FREERUN_DUR		2	/* freerun with duration */
+
+
+#define FBIOBLANK               0x4611          /* arg: 0 or vesa level + 1 */
+
+ /* VESA Blanking Levels */
+#define VESA_NO_BLANKING        0
+#define VESA_VSYNC_SUSPEND      1
+#define VESA_HSYNC_SUSPEND      2
+#define VESA_POWERDOWN          3
+
+enum {
+	/* screen: unblanked, hsync: on,  vsync: on */
+	FB_BLANK_UNBLANK = VESA_NO_BLANKING,
+
+	/* screen: blanked,   hsync: on,  vsync: on */
+	FB_BLANK_NORMAL = VESA_NO_BLANKING + 1,
+
+	/* screen: blanked,   hsync: on,  vsync: off */
+	FB_BLANK_VSYNC_SUSPEND = VESA_VSYNC_SUSPEND + 1,
+
+	/* screen: blanked,   hsync: off, vsync: on */
+	FB_BLANK_HSYNC_SUSPEND = VESA_HSYNC_SUSPEND + 1,
+
+	/* screen: blanked,   hsync: off, vsync: off */
+	FB_BLANK_POWERDOWN = VESA_POWERDOWN + 1
+};
+
+
 static codec_para_t codecParam = { 0 };
 
-static int osd_blank(char *path,int cmd) {
-  int fd;
-  char bcmd[16];
 
-  fd = open(path, O_CREAT|O_RDWR | O_TRUNC, 0644);
+static void set_osd_blank_enabled(int osd, bool value)
+{
+	if (osd < 0 || osd > 1)
+	{
+		printf("set_osd_blank_enabled: invalid osd (%d)\n", osd);
+		return;
+	}
 
-  if(fd>=0) {
-    sprintf(bcmd,"%d",cmd);
-    int ret = write(fd,bcmd,strlen(bcmd));
-    if (ret < 0) {
-      printf("osd_blank error during write: %x\n", ret);
-    }
-    close(fd);
-    return 0;
-  }
+	const char* path;
+	switch (osd)
+	{
+	case 0:
+		path = "/dev/fb0";
+		break;
 
-  return -1;
+	case 1:
+		path = "/dev/fb1";
+		break;
+
+	default:
+		printf("set_osd_blank_enabled: invalid osd (%d)\n", osd);
+		return;
+	}
+
+
+	int fd = open(path, O_RDWR | O_TRUNC);
+	if (fd < 0)
+	{
+		printf("could not open OSD (%x)\n", fd);
+	}
+	else
+	{
+		int ret = ioctl(fd, FBIOBLANK, value ? FB_BLANK_NORMAL : FB_BLANK_UNBLANK);
+		if (ret < 0)
+		{
+			printf("FBIOBLANK failed (%x)\n", ret);
+		}
+
+		close(fd);
+	}
+}
+
+static void set_freerun_enabled(bool value)
+{
+	int fd = open("/dev/amvideo", O_RDWR | O_TRUNC);
+	if (fd < 0)
+	{
+		printf("could not open /dev/amvideo (%x)\n", fd);
+	}
+	else
+	{
+		int ret = ioctl(fd, AMSTREAM_IOC_SET_FREERUN_MODE, value ? FREERUN_NODUR : FREERUN_NONE);
+		if (ret < 0)
+		{
+			printf("AMSTREAM_IOC_SET_FREERUN_MODE failed (%x)\n", ret);
+		}
+
+		close(fd);
+	}
 }
 
 void aml_setup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags) {
-  osd_blank("/sys/class/graphics/fb0/blank",1);
-  osd_blank("/sys/class/graphics/fb1/blank",0);
+  set_osd_blank_enabled(0, true);
+  set_osd_blank_enabled(1, true);
+
+  set_freerun_enabled(true);
 
   codecParam.stream_type = STREAM_TYPE_ES_VIDEO;
   codecParam.has_video = 1;
@@ -103,8 +181,11 @@ void aml_setup(int videoFormat, int width, int height, int redrawRate, void* con
 
 void aml_cleanup() {
   int api = codec_close(&codecParam);
-  osd_blank("/sys/class/graphics/fb0/blank",0);
-  osd_blank("/sys/class/graphics/fb1/blank",0);
+
+  set_osd_blank_enabled(0, false);
+  set_osd_blank_enabled(1, false);
+
+  set_freerun_enabled(false);
 }
 
 int aml_submit_decode_unit(PDECODE_UNIT decodeUnit) {

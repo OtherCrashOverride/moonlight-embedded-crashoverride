@@ -63,7 +63,11 @@ static void alsa_renderer_init(int audioConfiguration, POPUS_MULTISTREAM_CONFIGU
   unsigned int sampleRate = opusConfig->sampleRate;
 
   if (audio_device == NULL)
+#ifdef HAVE_AML
+	audio_device = "default";
+#else
     audio_device = "sysdefault";
+#endif
 
   /* Open PCM device for playback. */
   CHECK_RETURN(snd_pcm_open(&handle, audio_device, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK))

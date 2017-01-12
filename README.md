@@ -11,6 +11,7 @@ This is a fork for Odroid C1/C2.
 ```
 git clone https://github.com/OtherCrashOverride/moonlight-embedded-crashoverride.git
 cd moonlight-embedded-crashoverride
+git submodule update --init
 mkdir build
 cd build/
 cmake -D CMAKE_BUILD_TYPE=Release ../

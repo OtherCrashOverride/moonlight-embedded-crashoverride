@@ -37,7 +37,7 @@ public:
 	Mfc()
 	{
 		// O_NONBLOCK prevents deque operations from blocking if no buffers are ready
-		mfc_fd = open(decoderName, O_RDWR | O_NONBLOCK, 0);
+		mfc_fd = open(decoderName, O_RDWR | O_NONBLOCK);
 		if (mfc_fd < 0)
 		{
 			throw Exception("Failed to open MFC");

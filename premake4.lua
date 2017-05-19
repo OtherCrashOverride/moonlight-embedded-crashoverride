@@ -20,7 +20,7 @@ project "moonlight-common-c"
 
    configuration "Release"
       flags { "Optimize" }
-      defines { "" }
+      defines { "NDEBUG" }
 
 project "h264bitstream"
    location (output)
@@ -37,7 +37,7 @@ project "h264bitstream"
 
    configuration "Release"
       flags { "Optimize" }
-      defines { "" }
+      defines { "NDEBUG" }
 
 project "gamestream"
    location (output)
@@ -56,7 +56,7 @@ project "gamestream"
 
    configuration "Release"
       flags { "Optimize" }
-      defines { "" }
+      defines { "NDEBUG" }
 
 project "xu4"
 	targetname ("moonlight-embedded")
@@ -80,4 +80,4 @@ project "xu4"
 
    configuration "Release"
       flags { "Optimize" }
-      defines { "" }
+      defines { "NDEBUG" }

@@ -264,7 +264,54 @@ void FeedMfc()
 
 		mutex.unlock();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		if (mfc->CheckEnqueueBuffersAvailable())
+		{
+			// MFC has buffers, waiting for network to deliver data.
+			
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		else
+		{
+			// MFC buffers are all used, wait for a free one.
+
+			pollfd fds = { 0 };
+			fds.fd = mfc->FileDescriptor();
+			fds.events = POLLOUT; //POLLOUT | POLLWRNORM; //POLLIN | POLLRDNORM 
+
+			int ret = poll(&fds, 1, 500); //500ms
+			if (ret < 0)
+			{
+				printf("poll: error=%d\n", errno);
+			}
+			else if (ret == 0)
+			{
+				printf("poll: timeout\n");
+			}
+			else if (ret > 0)
+			{
+#if 0
+				/* An event on one of the fds has occurred. */
+				printf("poll: ");
+
+				if (fds.revents & POLLWRNORM) {
+					printf("POLLWRNORM ");
+				}
+				if (fds.revents & POLLOUT) {
+					printf("POLLOUT ");
+				}
+				if (fds.revents & POLLIN) {
+					printf("POLLIN ");
+				}
+				//if (fds.revents & POLLHUP) {
+				//	printf("POLLHUP ");
+				//}
+				if (fds.revents & POLLPRI) {
+					printf("POLLPRI ");
+				}
+				printf("\n");
+#endif
+			}
+		}
 	}
 }
 

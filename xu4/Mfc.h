@@ -23,6 +23,15 @@ class Mfc
 
 
 public:
+	size_t FreeBufferCount() const
+	{
+		return freeBuffers.size();
+	}
+
+	int FileDescriptor() const
+	{
+		return mfc_fd;
+	}
 
 
 	Mfc()
@@ -114,6 +123,38 @@ public:
 		StreamOff();
 
 		close(mfc_fd);
+	}
+
+	bool CheckEnqueueBuffersAvailable()
+	{
+		bool result = false;
+
+		// Deque any available buffers
+		if (freeBuffers.size() > 0)
+		{
+			result = true;
+		}
+		else
+		{
+			v4l2_plane dqplanes2[4];
+
+			v4l2_buffer dqbuf = { 0 };
+			dqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+			dqbuf.memory = V4L2_MEMORY_MMAP;
+			dqbuf.m.planes = dqplanes2;
+			dqbuf.length = 1;
+
+			int ret = ioctl(mfc_fd, VIDIOC_DQBUF, &dqbuf);
+			if (ret == 0)
+			{
+				//printf("Mfc::Enqueue: dequeues buffer %d\n", dqbuf.index);
+				freeBuffers.push((int)dqbuf.index);
+				result = true;
+			}
+			//break;
+		}
+
+		return result;
 	}
 
 	void Enqueue(char* data, size_t length)

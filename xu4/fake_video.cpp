@@ -29,11 +29,13 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <signal.h>
+#include <poll.h>
 
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <vector>
+#include <chrono>
 
 extern "C"
 {
@@ -49,6 +51,7 @@ bool isStreaming = false;
 bool isRunning = true;
 std::thread thread;
 std::mutex mutex;
+std::thread feedThread;
 
 typedef std::shared_ptr<std::vector<char>> VectorSPTR;
 std::queue<VectorSPTR> freeBuffers;
@@ -103,17 +106,137 @@ void Render()
 	scene->Load();
 	printf("Render: scene loaded.\n");
 
-	mfc = std::make_shared<Mfc>();
+	//mfc = std::make_shared<Mfc>();
 
 	printf("Render: entering main loop.\n");
+
+	pollfd fds;
+	fds.fd = mfc->FileDescriptor();
+	fds.events = POLLOUT; //POLLOUT | POLLWRBAND; //POLLIN | POLLRDNORM 
+
 	while (isRunning)
 	{
 		window->ProcessMessages();
 
-		mutex.lock();
-		
-		if (filledBuffers.size() > 0)
+		//mutex.lock();
+		//
+		//while (filledBuffers.size() > 0 && 
+		//	   mfc->CheckEnqueueBuffersAvailable())
+		//{
+		//	//printf("filledBuffers=%d, freeBuffers=%d\n", filledBuffers.size(), mfc->FreeBufferCount());
+
+		//	VectorSPTR buffer = filledBuffers.front();
+		//	filledBuffers.pop();
+
+		//	mfc->Enqueue(&buffer->operator[](0), buffer->size());
+
+		//	freeBuffers.push(buffer);
+
+		//	if (!isStreaming)
+		//	{
+		//		int captureWidth;
+		//		int captureHeight;
+		//		v4l2_crop crop;
+		//		mfc->StreamOn(captureWidth, captureHeight, crop);
+
+		//		printf("MFC: width=%d, height=%d\n", captureWidth, captureHeight);
+
+		//		// Creat the rendering textures
+		//		scene->SetTextureProperties(captureWidth, captureHeight,
+		//		crop.c.left, crop.c.top,
+		//		crop.c.width, crop.c.height);
+
+		//		isStreaming = true;
+		//	}
+		//}
+
+		//mutex.unlock();
+
+		bool frame = false;
+		while (isStreaming)
 		{
+			bool tmp = mfc->Dequeue(scene);
+			frame |= tmp;
+
+			if (!tmp)
+				break;
+		}
+
+		if (frame)
+		{
+#if 0
+			// Wait for VSYNC
+			glFinish();
+
+			drmVBlank vbl =
+			{
+				.request =
+				{
+					.type = DRM_VBLANK_RELATIVE,
+					.sequence = 1,
+				}
+			};
+
+			int io = drmWaitVBlank(drmfd, &vbl);
+			if (io)
+			{
+				throw Exception("drmWaitVBlank failed.");
+			}
+#endif
+
+			window->SwapBuffers();
+		}
+		//else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+
+		//std::this_thread::yield();
+
+//		int ret = poll(&fds, 1, 500); //500ms
+//		if (ret > 0)
+//		{
+//#if 0
+//			/* An event on one of the fds has occurred. */
+//			printf("poll: ");
+//
+//			if (fds.revents & POLLWRBAND) {
+//				/* Priority data may be written on device number i. */
+//				printf("POLLWRBAND ");
+//			}
+//			if (fds.revents & POLLOUT) {
+//				/* Data may be written on device number i. */
+//				printf("POLLOUT ");
+//			}
+//			if (fds.revents & POLLHUP) {
+//				/* A hangup has occurred on device number i. */
+//				printf("POLLHUP ");
+//			}
+//			printf("\n");
+//#endif
+//		}
+	}
+
+	printf("Cleaning up MFC.\n");
+	fflush(stdout);
+
+	mfc->StreamOff();
+
+	printf("Render: exited.\n");
+	fflush(stdout);
+}
+
+void FeedMfc()
+{
+	while (isRunning)
+	{
+		mutex.lock();
+
+		while (filledBuffers.size() > 0 &&
+			mfc->CheckEnqueueBuffersAvailable())
+		{
+			//printf("filledBuffers=%d, freeBuffers=%d\n", filledBuffers.size(), mfc->FreeBufferCount());
+
 			VectorSPTR buffer = filledBuffers.front();
 			filledBuffers.pop();
 
@@ -132,8 +255,8 @@ void Render()
 
 				// Creat the rendering textures
 				scene->SetTextureProperties(captureWidth, captureHeight,
-				crop.c.left, crop.c.top,
-				crop.c.width, crop.c.height);
+					crop.c.left, crop.c.top,
+					crop.c.width, crop.c.height);
 
 				isStreaming = true;
 			}
@@ -141,23 +264,8 @@ void Render()
 
 		mutex.unlock();
 
-
-		if (isStreaming && mfc->Dequeue(scene))
-		{
-			window->SwapBuffers();
-		}
-
-
-		std::this_thread::yield();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-
-	printf("Cleaning up MFC.\n");
-	fflush(stdout);
-
-	mfc->StreamOff();
-
-	printf("Render: exited.\n");
-	fflush(stdout);
 }
 
 // Signal handler for Ctrl-C
@@ -173,15 +281,16 @@ void decoder_renderer_setup(int videoFormat, int width, int height, int redrawRa
 {
 	/*window = std::make_shared<X11Window>(width, height, "moonlight-embedded");*/
 	/*drmfd = OpenDRM(window->X11Display());*/
-	/*mfc = std::make_shared<Mfc>();*/
+	mfc = std::make_shared<Mfc>();
 	
 	//scene = std::make_shared<Scene>(window.get());
 	//scene->Load();
 
 	// Trap signal to clean up
-	signal(SIGINT, SignalHandler);
+	//signal(SIGINT, SignalHandler);
 
 	thread = std::thread(Render);
+	feedThread = std::thread(FeedMfc);
 }
 
 void decoder_renderer_cleanup()
@@ -191,6 +300,7 @@ void decoder_renderer_cleanup()
 
 	isRunning = false;
 	thread.join();
+	feedThread.join();
 
 	////close(drmfd);
 	//printf("Cleaning up MFC.\n");
@@ -235,33 +345,37 @@ int decoder_renderer_submit_decode_unit(PDECODE_UNIT decodeUnit)
 
 	mutex.unlock();
 
-  //if (!isStreaming && scene)
-  //{
-	 // mutex.lock();
 
-	 // int captureWidth;
-	 // int captureHeight;
-	 // v4l2_crop crop;
-	 // mfc->StreamOn(captureWidth, captureHeight, crop);
+	////while (filledBuffers.size() > 0 &&
+	////	mfc->CheckEnqueueBuffersAvailable())
+	//{
+	//	//printf("filledBuffers=%d, freeBuffers=%d\n", filledBuffers.size(), mfc->FreeBufferCount());
 
-	 // printf("MFC: width=%d, height=%d\n", captureWidth, captureHeight);
+	//	//VectorSPTR buffer = filledBuffers.front();
+	//	//filledBuffers.pop();
 
-	 // // Creat the rendering textures
-	 // scene->SetTextureProperties(captureWidth, captureHeight,
-		//  crop.c.left, crop.c.top,
-		//  crop.c.width, crop.c.height);
+	//	mfc->Enqueue(&buffer->operator[](0), buffer->size());
 
-	 // isStreaming = true;
+	//	freeBuffers.push(buffer);
 
-	 // mutex.unlock();
-  //}
+	//	if (!isStreaming)
+	//	{
+	//		int captureWidth;
+	//		int captureHeight;
+	//		v4l2_crop crop;
+	//		mfc->StreamOn(captureWidth, captureHeight, crop);
 
-  //while (mfc->Dequeue(scene))
-  //{
-	 // window->SwapBuffers();
-  //}
+	//		printf("MFC: width=%d, height=%d\n", captureWidth, captureHeight);
 
-  //window->ProcessMessages();
+	//		// Creat the rendering textures
+	//		scene->SetTextureProperties(captureWidth, captureHeight,
+	//			crop.c.left, crop.c.top,
+	//			crop.c.width, crop.c.height);
+
+	//		isStreaming = true;
+	//	}
+	//}
+
 
 	return DR_OK;
 }
@@ -270,5 +384,5 @@ DECODER_RENDERER_CALLBACKS decoder_callbacks_fake = {
   .setup = decoder_renderer_setup,
   .cleanup = decoder_renderer_cleanup,
   .submitDecodeUnit = decoder_renderer_submit_decode_unit,
-  .capabilities = CAPABILITY_DIRECT_SUBMIT | CAPABILITY_SLICES_PER_FRAME(4),
+  .capabilities = CAPABILITY_DIRECT_SUBMIT, // | CAPABILITY_SLICES_PER_FRAME(1),
 };

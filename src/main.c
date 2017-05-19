@@ -113,6 +113,8 @@ static void stream(PSERVER_DATA server, PCONFIGURATION config, enum platform sys
   #endif
 
   LiStopConnection();
+
+  platform_get_video(system)->cleanup();
 }
 
 static void help() {

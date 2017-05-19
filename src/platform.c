@@ -59,7 +59,7 @@ enum platform platform_check(char* name) {
   if (std || strcmp(name, "sdl") == 0)
     return SDL;
   #endif
-  if (strcmp(name, "fake") == 0)
+  if (std || strcmp(name, "fake") == 0)
     return FAKE;
 
   return 0;
@@ -107,7 +107,7 @@ AUDIO_RENDERER_CALLBACKS* platform_get_audio(enum platform system) {
     #endif
     return &audio_callbacks_alsa;
   case FAKE:
-    return &audio_callbacks_fake;
+	  return &audio_callbacks_alsa; //audio_callbacks_fake;
   }
   return NULL;
 }

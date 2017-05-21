@@ -91,6 +91,143 @@ int OpenDRM(Display* dpy)
 	return fd;
 }
 
+bool isFrameAvailable = false;
+unsigned int frameIndex;
+int frameY = 0;
+int frameUV = 0;
+std::mutex frameMutex;
+std::thread decodeThread;
+
+void Decode()
+{
+	printf("Decode thread started.\n");
+
+	while (isRunning)
+	{
+
+		
+		unsigned int i;
+		int y;
+		int uv;
+		
+		if (mfc->Dequeue(&i, &y, &uv))
+		{
+			frameMutex.lock();
+
+			isFrameAvailable = true;
+			frameIndex = i;
+			frameY = y;
+			frameUV = uv;
+
+			//// flush any backed up buffers
+			//while(mfc->Dequeue(&i, &y, &uv))
+			//{
+			//	mfc->DequeueDone(i);
+			//}
+
+			frameMutex.unlock();
+		}
+		
+
+		//if (!temp)
+		//{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			//std::this_thread::yield();
+		//}
+	}
+
+	printf("Decode thread exited.\n");
+}
+
+void FeedMfc()
+{
+	while (isRunning)
+	{
+		mutex.lock();
+
+		while (filledBuffers.size() > 0 &&
+			mfc->CheckEnqueueBuffersAvailable())
+		{
+			//printf("filledBuffers=%d, freeBuffers=%d\n", filledBuffers.size(), mfc->FreeBufferCount());
+
+			VectorSPTR buffer = filledBuffers.front();
+			filledBuffers.pop();
+
+			mfc->Enqueue(&buffer->operator[](0), buffer->size());
+
+			freeBuffers.push(buffer);
+
+			if (!isStreaming)
+			{
+				int captureWidth;
+				int captureHeight;
+				v4l2_crop crop;
+				mfc->StreamOn(captureWidth, captureHeight, crop);
+
+				printf("MFC: width=%d, height=%d\n", captureWidth, captureHeight);
+
+				// Creat the rendering textures
+				scene->SetTextureProperties(captureWidth, captureHeight,
+					crop.c.left, crop.c.top,
+					crop.c.width, crop.c.height);
+
+				isStreaming = true;
+			}
+		}
+
+		mutex.unlock();
+
+		//if (mfc->CheckEnqueueBuffersAvailable())
+		{
+			// MFC has buffers, waiting for network to deliver data.
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		//		else
+		//		{
+		//			// MFC buffers are all used, wait for a free one.
+		//
+		//			pollfd fds = { 0 };
+		//			fds.fd = mfc->FileDescriptor();
+		//			fds.events = POLLOUT; //POLLOUT | POLLWRNORM; //POLLIN | POLLRDNORM 
+		//
+		//			int ret = poll(&fds, 1, 500); //500ms
+		//			if (ret < 0)
+		//			{
+		//				printf("poll: error=%d\n", errno);
+		//			}
+		//			else if (ret == 0)
+		//			{
+		//				printf("poll: timeout\n");
+		//			}
+		//			else if (ret > 0)
+		//			{
+		//#if 0
+		//				/* An event on one of the fds has occurred. */
+		//				printf("poll: ");
+		//
+		//				if (fds.revents & POLLWRNORM) {
+		//					printf("POLLWRNORM ");
+		//				}
+		//				if (fds.revents & POLLOUT) {
+		//					printf("POLLOUT ");
+		//				}
+		//				if (fds.revents & POLLIN) {
+		//					printf("POLLIN ");
+		//				}
+		//				//if (fds.revents & POLLHUP) {
+		//				//	printf("POLLHUP ");
+		//				//}
+		//				if (fds.revents & POLLPRI) {
+		//					printf("POLLPRI ");
+		//				}
+		//				printf("\n");
+		//#endif
+		//			}
+		//		}
+	}
+}
+
 void Render()
 {
 	printf("Render: entered.\n");
@@ -107,6 +244,8 @@ void Render()
 	printf("Render: scene loaded.\n");
 
 	//mfc = std::make_shared<Mfc>();
+	feedThread = std::thread(FeedMfc);
+	decodeThread = std::thread(Decode);
 
 	printf("Render: entering main loop.\n");
 
@@ -152,22 +291,35 @@ void Render()
 
 		//mutex.unlock();
 
-		bool frame = false;
-		while (isStreaming)
-		{
-			bool tmp = mfc->Dequeue(scene);
-			frame |= tmp;
+		//bool frame = false;
+		//while (isStreaming)
+		//{
+		//	bool tmp = mfc->Dequeue(scene);
+		//	frame |= tmp;
 
-			if (!tmp)
-				break;
-		}
-
-		if (frame)
+		//	if (!tmp)
+		//		break;
+		//}
+		
+		frameMutex.lock();
+		
+		if (isFrameAvailable)
 		{
-#if 0
-			// Wait for VSYNC
+			//printf("Render: frame.\n");
+
+			scene->Draw(frameY, frameUV);
+
+
+			mfc->DequeueDone(frameIndex);
+
+			isFrameAvailable = false;
+			frameMutex.unlock();
+
+#if 1
+			// Wait for GPU
 			glFinish();
 
+			// Wait for VSYNC
 			drmVBlank vbl =
 			{
 				.request =
@@ -186,8 +338,10 @@ void Render()
 
 			window->SwapBuffers();
 		}
-		//else
+		else
 		{
+			frameMutex.unlock();
+
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
@@ -226,94 +380,7 @@ void Render()
 	fflush(stdout);
 }
 
-void FeedMfc()
-{
-	while (isRunning)
-	{
-		mutex.lock();
 
-		while (filledBuffers.size() > 0 &&
-			mfc->CheckEnqueueBuffersAvailable())
-		{
-			//printf("filledBuffers=%d, freeBuffers=%d\n", filledBuffers.size(), mfc->FreeBufferCount());
-
-			VectorSPTR buffer = filledBuffers.front();
-			filledBuffers.pop();
-
-			mfc->Enqueue(&buffer->operator[](0), buffer->size());
-
-			freeBuffers.push(buffer);
-
-			if (!isStreaming)
-			{
-				int captureWidth;
-				int captureHeight;
-				v4l2_crop crop;
-				mfc->StreamOn(captureWidth, captureHeight, crop);
-
-				printf("MFC: width=%d, height=%d\n", captureWidth, captureHeight);
-
-				// Creat the rendering textures
-				scene->SetTextureProperties(captureWidth, captureHeight,
-					crop.c.left, crop.c.top,
-					crop.c.width, crop.c.height);
-
-				isStreaming = true;
-			}
-		}
-
-		mutex.unlock();
-
-		//if (mfc->CheckEnqueueBuffersAvailable())
-		{
-			// MFC has buffers, waiting for network to deliver data.
-			
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		}
-//		else
-//		{
-//			// MFC buffers are all used, wait for a free one.
-//
-//			pollfd fds = { 0 };
-//			fds.fd = mfc->FileDescriptor();
-//			fds.events = POLLOUT; //POLLOUT | POLLWRNORM; //POLLIN | POLLRDNORM 
-//
-//			int ret = poll(&fds, 1, 500); //500ms
-//			if (ret < 0)
-//			{
-//				printf("poll: error=%d\n", errno);
-//			}
-//			else if (ret == 0)
-//			{
-//				printf("poll: timeout\n");
-//			}
-//			else if (ret > 0)
-//			{
-//#if 0
-//				/* An event on one of the fds has occurred. */
-//				printf("poll: ");
-//
-//				if (fds.revents & POLLWRNORM) {
-//					printf("POLLWRNORM ");
-//				}
-//				if (fds.revents & POLLOUT) {
-//					printf("POLLOUT ");
-//				}
-//				if (fds.revents & POLLIN) {
-//					printf("POLLIN ");
-//				}
-//				//if (fds.revents & POLLHUP) {
-//				//	printf("POLLHUP ");
-//				//}
-//				if (fds.revents & POLLPRI) {
-//					printf("POLLPRI ");
-//				}
-//				printf("\n");
-//#endif
-//			}
-//		}
-	}
-}
 
 // Signal handler for Ctrl-C
 void SignalHandler(int s)
@@ -337,7 +404,8 @@ void decoder_renderer_setup(int videoFormat, int width, int height, int redrawRa
 	//signal(SIGINT, SignalHandler);
 
 	thread = std::thread(Render);
-	feedThread = std::thread(FeedMfc);
+	//feedThread = std::thread(FeedMfc);
+	//decodeThread = std::thread(Decode);
 }
 
 void decoder_renderer_cleanup()
@@ -348,6 +416,7 @@ void decoder_renderer_cleanup()
 	isRunning = false;
 	thread.join();
 	feedThread.join();
+	decodeThread.join();
 
 	////close(drmfd);
 	//printf("Cleaning up MFC.\n");
@@ -431,5 +500,5 @@ DECODER_RENDERER_CALLBACKS decoder_callbacks_fake = {
   .setup = decoder_renderer_setup,
   .cleanup = decoder_renderer_cleanup,
   .submitDecodeUnit = decoder_renderer_submit_decode_unit,
-  .capabilities = CAPABILITY_DIRECT_SUBMIT, // | CAPABILITY_SLICES_PER_FRAME(1),
+  .capabilities = CAPABILITY_DIRECT_SUBMIT | CAPABILITY_SLICES_PER_FRAME(4),
 };

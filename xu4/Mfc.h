@@ -66,9 +66,9 @@ public:
 		// Create input buffers
 		/* This is the size of the buffer for the compressed stream.
 		* It limits the maximum compressed frame size. */
-		const int STREAM_BUFFER_SIZE = (1024 * 1024);
+		const int STREAM_BUFFER_SIZE = (1024 * 1024 * 4);
 		/* The number of compressed stream buffers */
-		const int STREAM_BUFFER_CNT = 8;
+		const int STREAM_BUFFER_CNT = 32;
 
 
 		// Codec input
@@ -221,7 +221,7 @@ public:
 		}
 	}
 
-	bool Dequeue(std::shared_ptr<Scene> scene)
+	bool Dequeue(unsigned int* index, int* outY, int* outUV)
 	{
 		int val;
 		int ret;
@@ -245,33 +245,68 @@ public:
 
 			std::shared_ptr<NV12CodecData> available = outBuffers[(int)dqbuf.index];
 
-			scene->Draw(available->GetY()->Dmabuf, available->GetVU()->Dmabuf);
+			//scene->Draw(available->GetY()->Dmabuf, available->GetVU()->Dmabuf);
+			*index = dqbuf.index;
+			*outY = available->GetY()->Dmabuf;
+			*outUV = available->GetVU()->Dmabuf;
 
-			// Re-queue buffer
-			v4l2_plane dqplanes[4] = { 0 };
-			v4l2_buffer qbuf = { 0 };
-			qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-			qbuf.memory = V4L2_MEMORY_MMAP;
-			qbuf.m.planes = dqplanes;
-			qbuf.length = 4;
-			qbuf.index = available->Index;
+			//// Re-queue buffer
+			//v4l2_plane dqplanes[4] = { 0 };
+			//v4l2_buffer qbuf = { 0 };
+			//qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+			//qbuf.memory = V4L2_MEMORY_MMAP;
+			//qbuf.m.planes = dqplanes;
+			//qbuf.length = 4;
+			//qbuf.index = available->Index;
 
-			int ret = ioctl(mfc_fd, VIDIOC_QUERYBUF, &qbuf);
-			if (ret != 0)
-			{
-				throw Exception("VIDIOC_QUERYBUF failed.");
-			}
+			//int ret = ioctl(mfc_fd, VIDIOC_QUERYBUF, &qbuf);
+			//if (ret != 0)
+			//{
+			//	throw Exception("VIDIOC_QUERYBUF failed.");
+			//}
 
-			// Requeue buffer
-			ret = ioctl(mfc_fd, VIDIOC_QBUF, &qbuf);
-			if (ret != 0)
-			{
-				//printf("Dequeue: VIDIOC_QBUF failed. (%d)", ret);
-				throw Exception("Dequeue: VIDIOC_QBUF failed.");
-			}
+			//// Requeue buffer
+			//ret = ioctl(mfc_fd, VIDIOC_QBUF, &qbuf);
+			//if (ret != 0)
+			//{
+			//	//printf("Dequeue: VIDIOC_QBUF failed. (%d)", ret);
+			//	throw Exception("Dequeue: VIDIOC_QBUF failed.");
+			//}
+		}
+		else
+		{
+			*index = 0;
+			*outY = 0;
+			*outUV = 0;
 		}
 
 		return result;
+	}
+
+	void DequeueDone(unsigned int index)
+	{
+		// Re-queue buffer
+		v4l2_plane dqplanes[4] = { 0 };
+		v4l2_buffer qbuf = { 0 };
+		qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+		qbuf.memory = V4L2_MEMORY_MMAP;
+		qbuf.m.planes = dqplanes;
+		qbuf.length = 4;
+		qbuf.index = index;
+
+		int ret = ioctl(mfc_fd, VIDIOC_QUERYBUF, &qbuf);
+		if (ret != 0)
+		{
+			throw Exception("VIDIOC_QUERYBUF failed.");
+		}
+
+		// Requeue buffer
+		ret = ioctl(mfc_fd, VIDIOC_QBUF, &qbuf);
+		if (ret != 0)
+		{
+			//printf("Dequeue: VIDIOC_QBUF failed. (%d)", ret);
+			throw Exception("Dequeue: VIDIOC_QBUF failed.");
+		}
 	}
 
 	void StreamOn(int& captureWidth, int& captureHeigh, v4l2_crop& crop)
@@ -328,7 +363,7 @@ public:
 		// request the buffers
 		outBuffers = CodecData::RequestBuffers<NV12CodecData>(mfc_fd,
 			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-			ctrl.value,
+			ctrl.value * 2,
 			true);
 
 

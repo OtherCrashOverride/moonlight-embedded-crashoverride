@@ -56,6 +56,7 @@ std::thread feedThread;
 typedef std::shared_ptr<std::vector<char>> VectorSPTR;
 std::queue<VectorSPTR> freeBuffers;
 std::queue<VectorSPTR> filledBuffers;
+std::queue<unsigned int> dequeuedBuffers;
 
 
 int OpenDRM(Display* dpy)
@@ -125,7 +126,12 @@ void Decode()
 			//	mfc->DequeueDone(i);
 			//}
 
+			dequeuedBuffers.push(frameIndex);
+
 			frameMutex.unlock();
+
+			//printf("MFC: decoded frame.\n");
+			//std::this_thread::yield();
 		}
 		
 
@@ -309,8 +315,13 @@ void Render()
 
 			scene->Draw(frameY, frameUV);
 
+			while (dequeuedBuffers.size() > 0)
+			{
+				frameIndex = dequeuedBuffers.front();
+				dequeuedBuffers.pop();
 
-			mfc->DequeueDone(frameIndex);
+				mfc->DequeueDone(frameIndex);
+			}
 
 			isFrameAvailable = false;
 			frameMutex.unlock();

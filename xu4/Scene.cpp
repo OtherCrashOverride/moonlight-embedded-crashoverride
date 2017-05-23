@@ -302,6 +302,7 @@ GLuint Scene::GetTexutreForDmabuf(int dmafd, int dmafd2)
 	}
 	else
 	{
+		//printf("EGLImage already exists: y=%d, uv=%d\n", dmafd, dmafd2);
 		result = iter->second;
 	}
 

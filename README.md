@@ -5,7 +5,7 @@ Moonlight Embedded is an open source implementation of NVIDIA's GameStream, as u
 This is a fork for Odroid XU3/XU4.
 
 ## Dependencies
-`sudo apt install cmake libasound2-dev libopus-dev libevdev-dev libudev-dev libcurl4-openssl-dev libssl-dev libavahi-client-dev libenet-dev premake4`
+`sudo apt install libasound2-dev libopus-dev libevdev-dev libudev-dev libcurl4-openssl-dev libssl-dev libavahi-client-dev libenet-dev uuid-dev libexpat1-dev xorg-dev premake4`
 
 ## Build
 ```

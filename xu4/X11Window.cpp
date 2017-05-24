@@ -7,6 +7,7 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
+#include <X11/Xutil.h>
 #include <memory>
 #include <GLES2/gl2.h>
 
@@ -303,3 +304,4 @@ void X11Window::UnHideMouse()
 {
 	XUndefineCursor(x11Display, xwin);
 }
+

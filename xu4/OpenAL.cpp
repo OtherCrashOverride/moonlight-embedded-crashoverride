@@ -126,8 +126,7 @@ static void OpenAL_decode_and_play_sample(char* data, int length)
 	alGetSourcei(source, AL_BUFFERS_PROCESSED, &buffersProcessed);
 
 	for (int i = 0; i < buffersProcessed; ++i)
-	{
-		
+	{		
 		ALuint openALBufferID;
 		alSourceUnqueueBuffers(source, 1, &openALBufferID);
 

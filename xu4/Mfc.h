@@ -363,7 +363,7 @@ public:
 		// request the buffers
 		outBuffers = CodecData::RequestBuffers<NV12CodecData>(mfc_fd,
 			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-			ctrl.value * 2,
+			ctrl.value * 3,
 			true);
 
 

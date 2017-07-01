@@ -278,6 +278,8 @@ GLuint Scene::GetTexutreForDmabuf(int dmafd, int dmafd2)
 			EGL_NONE
 		};
 
+		fprintf(stderr, "Scene: calling eglCreateImageKHR.\n");
+
 		EGLImageKHR image = eglCreateImageKHR(window->EglDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, img_attrs);
 		Egl::CheckError();
 

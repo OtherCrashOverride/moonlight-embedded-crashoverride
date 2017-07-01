@@ -66,6 +66,11 @@ public:
     Scene(WindowBase* window)
 		: window(window)
     {
+		glClearColor(1, 0, 0, 1);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		OpenGL::CheckError();
+
+		window->SwapBuffers();
     }
 	
 

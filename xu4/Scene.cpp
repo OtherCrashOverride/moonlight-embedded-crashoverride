@@ -19,7 +19,7 @@
 //#define GL_GLEXT_PROTOTYPES 1
 #include <GLES2/gl2ext.h>
 
-#include "X11Window.h"
+//#include "X11Window.h"
 
 
 //Draws a series of triangles (three-sided polygons) using vertices v0, v1, v2, then v2, v1, v3 (note the order), then v2, v3, v4, and so on.
@@ -278,7 +278,7 @@ GLuint Scene::GetTexutreForDmabuf(int dmafd, int dmafd2)
 			EGL_NONE
 		};
 
-		EGLImageKHR image = eglCreateImageKHR(x11Window->EglDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, img_attrs);
+		EGLImageKHR image = eglCreateImageKHR(window->EglDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, img_attrs);
 		Egl::CheckError();
 
 		fprintf(stderr, "EGLImageKHR = %p, width=%d, height=%d\n", image, width, height);

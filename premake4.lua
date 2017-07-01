@@ -67,12 +67,38 @@ project "xu4"
 				 "/usr/include/libdrm" }
    files { "src/*.h", "src/*.c", "xu4/fake_video.cpp", "src/audio/fake.c", "src/input/evdev.c", "src/input/udev.c", "src/input/mapping.c",
 		   "xu4/*.h", "xu4/*.cpp" }
+   excludes { "xu4/FbdevWindow.*" }
    buildoptions { "--std=c++11" }
    links {"pthread", "udev", "evdev", "asound", "opus", "moonlight-common-c", "h264bitstream", "gamestream",
 		  "enet", "ssl", "crypto",
 		  "uuid", "expat", "avahi-client", "avahi-common", "curl",
 		  "m", "X11", "mali", "stdc++", "drm", "dri2", "openal"}
    defines { "HAVE_FAKE=1" }
+
+   configuration "Debug"
+      flags { "Symbols" }
+      defines { "DEBUG" }
+
+   configuration "Release"
+      flags { "Optimize" }
+      defines { "NDEBUG" }
+
+project "xu4-fbdev"
+	targetname ("moonlight-embedded")
+   location (output)
+   kind "ConsoleApp"
+   language "C"
+   includedirs { "libgamestream", "third_party/moonlight-common-c/src", "/usr/include/libevdev-1.0", "/usr/include/opus",
+				 "/usr/include/libdrm" }
+   files { "src/*.h", "src/*.c", "xu4/fake_video.cpp", "src/audio/fake.c", "src/input/evdev.c", "src/input/udev.c", "src/input/mapping.c",
+		   "xu4/*.h", "xu4/*.cpp" }
+   excludes { "xu4/X11Window.*" }
+   buildoptions { "--std=c++11" }
+   links {"pthread", "udev", "evdev", "asound", "opus", "moonlight-common-c", "h264bitstream", "gamestream",
+		  "enet", "ssl", "crypto",
+		  "uuid", "expat", "avahi-client", "avahi-common", "curl",
+		  "m", "X11", "mali", "stdc++", "drm", "dri2", "openal"}
+   defines { "HAVE_FAKE=1", "FBDEVWINDOW=1" }
 
    configuration "Debug"
       flags { "Symbols" }

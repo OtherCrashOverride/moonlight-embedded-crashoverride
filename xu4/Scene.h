@@ -1,11 +1,12 @@
 #pragma once
 
+#include "Window.h"
 #include "OpenGL.h"
 #include "Egl.h"
 
 //#include <GLES2/gl2.h>
 
-#include <X11/Xlib.h>
+
 #include <map>
 
 enum class SceneMode
@@ -14,11 +15,10 @@ enum class SceneMode
     Quad
 };
 
-class X11Window;
 
 class Scene
 {
-	X11Window* x11Window;
+	WindowBase* window;
     GLuint yTexture = 0;
     //GLuint vuTexture = 0;
     int width = 0;
@@ -62,10 +62,12 @@ public:
     }
 
 
-    Scene(X11Window* x11Window)
-		: x11Window(x11Window)
+
+    Scene(WindowBase* window)
+		: window(window)
     {
     }
+	
 
 
     void Load();

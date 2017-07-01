@@ -18,7 +18,7 @@
 
 #include <Limelight.h>
 
-#include "X11Window.h"
+
 #include "Exception.h"
 #include "Mfc.h"
 #include "Scene.h"
@@ -37,13 +37,22 @@
 #include <vector>
 #include <chrono>
 
-extern "C"
-{
-#include <X11/extensions/dri2.h>
-}
+#ifdef FBDEVWINDOW
+	#include "FbdevWindow.h"
+#else
+	#include "X11Window.h"
+	extern "C"
+	{
+	#include <X11/extensions/dri2.h>
+	}
+#endif
 
+#ifdef FBDEVWINDOW
+	std::shared_ptr<FbdevWindow> window;
+#else
+	std::shared_ptr<X11Window> window;
+#endif
 
-std::shared_ptr<X11Window> window;
 int drmfd = -1;
 std::shared_ptr<Mfc> mfc;
 std::shared_ptr<Scene> scene;
@@ -74,7 +83,7 @@ int OpenDRM(Display* dpy)
 		throw Exception("DRM device does not support dumb buffers");
 	}
 
-
+#ifndef FBDEVWINDOW
 	// Obtain DRM authorization
 	drm_magic_t magic;
 	if (drmGetMagic(fd, &magic))
@@ -87,7 +96,7 @@ int OpenDRM(Display* dpy)
 	{
 		throw Exception("DRI2Authenticate failed");
 	}
-
+#endif
 
 	return fd;
 }
@@ -238,10 +247,15 @@ void Render()
 {
 	printf("Render: entered.\n");
 
+#ifdef FBDEVWINDOW
+	window = std::make_shared<FbdevWindow>(1280, 720, "moonlight-embedded");
+	printf("Render: fbdev window created.\n");
+#else
 	window = std::make_shared<X11Window>(1280, 720, "moonlight-embedded");
-	printf("Render: window created.\n");
+	printf("Render: X11 window created.\n");
 
 	drmfd = OpenDRM(window->X11Display());
+#endif
 
 	scene = std::make_shared<Scene>(window.get());
 	printf("Render: scene created.\n");
@@ -326,6 +340,7 @@ void Render()
 			isFrameAvailable = false;
 			frameMutex.unlock();
 
+#ifndef FBDEVWINDOW
 #if 1
 			// Wait for GPU
 			glFinish();
@@ -345,6 +360,7 @@ void Render()
 			{
 				throw Exception("drmWaitVBlank failed.");
 			}
+#endif
 #endif
 
 			window->SwapBuffers();

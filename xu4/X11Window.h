@@ -1,22 +1,16 @@
 #pragma once
 
+#include "Window.h"
+
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
 #include <EGL/egl.h>
 
-enum class Action
-{
-    Nothing = 0,    //None is a #define
-    Quit,
-    ChangeScene
-
-};
 
 
-
-class X11Window
+class X11Window : public virtual WindowBase
 {
     int width = 0;
     int height = 0;
@@ -30,12 +24,12 @@ class X11Window
 
 public:
 
-	Display* X11Display() const
+	Display* X11Display() const 
 	{
 		return x11Display;
 	}
 
-	EGLDisplay EglDisplay() const
+	EGLDisplay EglDisplay() const override
 	{
 		return eglDisplay;
 	}
@@ -45,10 +39,10 @@ public:
     virtual ~X11Window();
 
 
-    void SwapBuffers();
-    Action ProcessMessages();
-	void MakeCurrent();
-	void HideMouse();
-	void UnHideMouse();
+    void SwapBuffers() override;
+    Action ProcessMessages() override;
+	void MakeCurrent() override;
+	void HideMouse() override;
+	void UnHideMouse() override;
 };
 
